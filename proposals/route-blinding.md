@@ -215,23 +215,14 @@ first hop's requirements, the error will come from another node `N(i)` inside th
 The sender can then unblind channels one-by-one by discovering their real fees/cltv and matching
 those to existing channels in the graph.
 
-To mitigate this, when nodes along the blinded path are offered an invalid HTLC, they should:
+To prevent this, the recipient can commit to a minimum value for fees/cltv and add that to each
+blinded node's `encrypted_recipient_data`. Every blinded node can then safely reject HTLCs that
+have fees/cltv below that minimum without deanonymizing themselves.
 
-* return a dummy error encrypted with a throw-away key: the sender will receive an error she can't
-  decrypt and doesn't know which node generated it
-* hold the HTLC for a random amount of time before sending the error (otherwise the sender can
-  still use timing to guess which node errored out)
+It's recommended that the recipient uses the same value for all nodes in the blinded path, adding
+a bit of fuzzing to their advertized fees/cltv.
 
-Even with such mitigations the sender can discover the real fees/cltv of one of the blinded
-channels. To do so she uses the correct fees and cltv for all but one channel, and for that target
-channel she tries fees/cltv until the payment succeeds. Once the payment succeeds she knows the
-approximate fees/cltv of the target channel (but since the payment succeeded, she can't continue
-probing).
-
-Maybe nodes along the blinded path could use slightly different fees/cltv than what they publicly
-advertize? Or the recipient could add some fuzzing to it to blind them more?
-
-Are those mitigations enough? Or can a clever attacker still work around them?
+Is this mitigation enough? Or can a clever attacker still work around that and unblind hops?
 
 ## Tips and Tricks
 
@@ -292,5 +283,3 @@ performs worse than Sphinx in latency, bandwidth and privacy.
 * Should we include feature bits in `encrypted_recipient_data`? It's yet another probing vector so
   we'd need to "sanitize" them to avoid reducing the node's anonymity set...
 * Should we add the `payment_hash` to the additional data authenticated by `encrypted_recipient_data`?
-* Should we include cltv and feerates in the `encrypted_recipient_data`? And use uniform fees/cltv
-  accross the blinded path to protect against attacks leveraging multiple blinded invoices?
