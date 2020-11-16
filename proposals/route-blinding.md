@@ -127,7 +127,8 @@ the `payment_hash` (for payment scenarios) to detect probing attempts by the sen
 
 Note that the introduction point uses the real `node_id`, not the blinded one, because the sender
 needs to be able to locate this introduction point and find a route to it. But the sender will send
-`E(0)`, which will allow the introduction point to compute the shared secret and correctly forward.
+`E(0)` in the onion `hop_payload` for `N(0)`, which will allow the introduction point to compute
+the shared secret and correctly forward.
 
 Note that in the specific case of payments, the recipient can sign the invoice with `e(0)`.
 The sender will recover `E(0)` from the signature so no extra field needs to be added to Bolt 11.
