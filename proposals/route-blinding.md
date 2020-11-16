@@ -43,23 +43,23 @@ Some use-cases where route blinding is useful include:
 
 ### Overview
 
-At a high level, route blinding works by having the recipient choose an introduction point and a
+At a high level, route blinding works by having the recipient choose an _introduction point_ and a
 route to himself from that introduction point. The recipient then blinds each node and channel
-along that route with ECDH. The recipient includes the blinded route and a secret in the invoice,
-which allows each node in the blinded route to incrementally unblind the payloads.
+along that route with ECDH. The recipient includes the blinded route and a _hop-blinding secret_ in
+the invoice, which allows each node in the blinded route to incrementally unblind the payloads.
 
 This scheme requires all the nodes in the blinded route and the sender to activate support for the
 feature. It only becomes effective once a big enough share of the network supports it.
 
 ### Notations
 
-* A node `N(i)`'s `node_id` is defined as: `P(i) = k(i) * G`.
-* Blinded `node_id`s are defined as: `B(i) = b(i) * G`.
+* A node `N(i)`'s `node_id` is defined as: `P(i) = k(i) * G` (`k(i)` is the node's private key).
+* Blinded `node_id`s are defined as: `B(i) = b(i) * G` (`b(i)` is the blinding factor).
 * Ephemeral public keys are defined as: `E(i) = e(i) * G`.
 
 ### Requirements
 
-A node `N(r)` wants to provide a blinded route `N(r) <- ... <- N(1) <- N(0)` that must be used
+A node `N(r)` wants to provide a blinded route `N(0) -> N(1) -> ... -> N(r)` that must be used
 to receive onion messages.
 
 * The channels used along that route may be either announced or unannounced.
@@ -67,11 +67,11 @@ to receive onion messages.
 * Intermediate nodes in the blinded route MUST NOT learn the `node_id` or `scid` of other
   intermediate nodes except for their immediate predecessor or successor.
 * Intermediate nodes in the blinded route MUST NOT learn their distance to the recipient `N(r)`.
-* Senders MUST NOT learn the real `node_id`s and `scid`s of the blinded intermediate hops after the
+* Senders MUST NOT learn the real `node_id` and `scid` of the blinded intermediate hops after the
   introduction point `N(0)`.
 * If `N(r)` creates multiple blinded routes to herself, senders MUST NOT be able to tell that these
-  routes lead to the same recipient (unless this information is leaked by higher layers of the
-  protocol, such as using the same `payment_hash`).
+  routes lead to the same recipient (unless of course this information is leaked by higher layers
+  of the protocol, such as using the same `payment_hash`).
 
 ### Encrypted recipient data
 
@@ -119,9 +119,11 @@ Note that this is exactly the same construction as Sphinx, but at each hop we us
 to derive a blinded `node_id` for `N(i)` for which the private key will only be known by `N(i)`.
 
 The recipient needs to provide `E(0)` and the blinded route to potential senders.
+
 The `encrypted_recipient_data(i)` is encrypted with ChaCha20-Poly1305 using the `rho(i)` key, and
 contains the real `short_channel_id` to forward to (and potentially other fields).
-`E(i)` is included as additional authenticated data to detect probing attempts by the sender.
+Its additional authenticated data (from ChaCha20-Poly1305's AEAD construction) contains `E(i)` and
+the `payment_hash` (for payment scenarios) to detect probing attempts by the sender.
 
 Note that the introduction point uses the real `node_id`, not the blinded one, because the sender
 needs to be able to locate this introduction point and find a route to it. But the sender will send
@@ -150,12 +152,13 @@ compute the following:
 ```
 
 It uses `rho(0)` to decrypt the `encrypted_recipient_data(0)` and discover the `scid` to forward to.
-It forwards the onion to the next node and includes `E(1)` in a TLV field in the message extension.
+It forwards the onion to the next node and includes `E(1)` in a TLV field in the message extension
+(at the end of the `update_add_htlc` message).
 
 All the following intermediate nodes `N(i)` do the following steps:
 
 ```text
-  E(i) <- extracted from TLV extension
+  E(i) <- extracted from update_add_htlc's TLV extension
   ss(i) = H(k(i) * E(i))
   b(i) = HMAC256("blinded_node_id", ss(i)) * k(i)
   Use b(i) to decrypt the incoming onion
@@ -165,10 +168,16 @@ All the following intermediate nodes `N(i)` do the following steps:
   Forward the onion to the next node and include E(i+1) in a TLV field in the message extension
 ```
 
+If the decryption process fails at any step, intermediate nodes must respond with an
+`update_fail_malformed_htlc`.
+
 ### Receiving from a blinded route
 
 When `N(r)` receives the onion message and `E(r)` in the TLV extension, she does the same
 unwrapping as intermediate nodes. The difference is that the onion will be a final onion.
+
+`N(r)` must also validate that `E(r)` matches what she generated with the invoice.
+Otherwise it's a probing attempt and she must respond with an `update_fail_malformed_htlc`.
 
 ### Sample flow
 
@@ -195,14 +204,27 @@ Eve can reach Carol via Dave: `Eve -> Dave -> Carol`.
       |     | | expiry: 120               | |     |     | | expiry: 110               | |     |     | | expiry: 100               | |     |     | | expiry: 100               | |     |
       |     | | scid: scid_dc             | |     |     | | encrd: encrypted(scid_cb) | |     |     | | encrd: encrypted(scid_ba) | |     |     | +---------------------------+ |     |
       |     | +---------------------------+ |     |     | | eph_key: E(carol)         | |     |     | +---------------------------+ |     |     |  tlv_extension                |     |
-      |     +-------------------------------+     |     | +---------------------------+ |     |     |  tlv_extension                |     |     | +-------------------+         |     |
-      |                                           |     +-------------------------------+     |     | +-------------------+         |     |     | | eph_key: E(alice) |         |     |
-      |                                           |                                           |     | | eph_key: E(bob)   |         |     |     | +-------------------+         |     |
-      |                                           |                                           |     | +-------------------+         |     |     +-------------------------------+     |
-      |                                           |                                           |     +-------------------------------+     |                                           |
+      |     | | amount_fwd: 10010 msat    | |     |     | +---------------------------+ |     |     | | amount_fwd: 10000 msat    | |     |     | +---------------------------+ |     |
+      |     | | expiry: 110               | |     |     | | amount_fwd: 10000 msat    | |     |     | | expiry: 100               | |     |     | | eph_key: E(alice)         | |     |
+      |     | | encrd: encrypted(scid_cb) | |     |     | | expiry: 100               | |     |     | +---------------------------+ |     |     | +---------------------------+ |     |
+      |     | +---------------------------+ |     |     | | encrd: encrypted(scid_ba) | |     |     |  tlv_extension                |     |     +-------------------------------+     |
+      |     | | amount_fwd: 10000 msat    | |     |     | +---------------------------+ |     |     | +---------------------------+ |     |                                           |
+      |     | | expiry: 100               | |     |     | | amount_fwd: 10000 msat    | |     |     | | eph_key: E(bob)           | |     |                                           |
+      |     | | encrd: encrypted(scid_ba) | |     |     | | expiry: 100               | |     |     | +---------------------------+ |     |                                           |
+      |     | +---------------------------+ |     |     | +---------------------------+ |     |     +-------------------------------+     |                                           |
+      |     | | amount_fwd: 10000 msat    | |     |     +-------------------------------+     |                                           |                                           |
+      |     | | expiry: 100               | |     |                                           |                                           |                                           |
+      |     | +---------------------------+ |     |                                           |                                           |                                           |
+      |     +-------------------------------+     |                                           |                                           |                                           |
+      |                                           |                                           |                                           |                                           |
 ```
 
-NB: the `encrypted_recipient_data` is annotated `encrd` for brevity.
+NB:
+
+* the `encrypted_recipient_data` is annotated `encrd` for brevity.
+* all onion payloads are described in each `update_add_htlc` for clarity, but only the first one
+  can be decrypted by the intermediate node that receives the message (standard Bolt 4 onion
+  encryption).
 
 ### Unblinding channels via fee probing
 
@@ -239,8 +261,8 @@ For example, if a merchant is selling an item for `N` satoshis, it should create
 
 The sender knows an upper bound on the distance between the recipient and `N(0)`. If the recipient
 is close to `N(0)`, this might not be ideal. In such cases, the recipient may add any number of
-dummy hops at the beginning of the blinded route by using `N(j) = N(r)`. The sender will not be
-able to distinguish those from normal blinded hops.
+dummy hops at the end of the blinded route by using `N(j) = N(r)`. The sender will not be able to
+distinguish those from normal blinded hops.
 
 Note that the recipient needs to fully validate each dummy hop to detect tampering.
 
@@ -282,4 +304,3 @@ performs worse than Sphinx in latency, bandwidth and privacy.
 
 * Should we include feature bits in `encrypted_recipient_data`? It's yet another probing vector so
   we'd need to "sanitize" them to avoid reducing the node's anonymity set...
-* Should we add the `payment_hash` to the additional data authenticated by `encrypted_recipient_data`?
