@@ -1,0 +1,83 @@
+<meta charset="UTF-8">
+<h1>BOLT #9: Assigned Feature Flags</h1>
+
+<p>This document tracks the assignment of <code>features</code> flags in the <code>init</code>
+message (<a href="01-messaging.md">BOLT #1</a>), as well as <code>features</code> fields in
+the <code>channel_announcement</code> and <code>node_announcement</code> messages ([BOLT</p>
+
+<h1>7](07-routing-gossip.md)).  The flags are tracked separately, since</h1>
+
+<p>new flags will likely be added over time.</p>
+
+<p>Flags are numbered from the least-significant bit, at bit 0 (i.e. 0x1,
+an <em>even</em> bit). They are generally assigned in pairs so that features
+can be introduced as optional (<em>odd</em> bits) and later upgraded to be compulsory
+(<em>even</em> bits), which will be refused by outdated nodes:
+see <a href="01-messaging.md#the-init-message">BOLT #1: The <code>init</code> Message</a>.</p>
+
+<p>Some features don't make sense on a per-channels or per-node basis, so
+each feature defines how it is presented in those contexts.  Some
+features may be required for opening a channel, but not a requirement
+for use of the channel, so the presentation of those features depends
+on the feature itself.</p>
+
+<p>The Context column decodes as follows:
+* <code>I</code>: presented in the <code>init</code> message.
+* <code>N</code>: presented in the <code>node_announcement</code> messages
+* <code>C</code>: presented in the <code>channel_announcement</code> message.
+* <code>C-</code>: presented in the <code>channel_announcement</code> message, but always odd (optional).
+* <code>C+</code>: presented in the <code>channel_announcement</code> message, but always even (required).
+* <code>9</code>: presented in <a href="11-payment-encoding.md">BOLT 11</a> invoices.</p>
+
+<p>| Bits  | Name                             | Description                                               | Context  | Dependencies      | Link                                  |
+|-------|----------------------------------|-----------------------------------------------------------|----------|-------------------|---------------------------------------|
+| 0/1   | <code>option_data_loss_protect</code>       | Requires or supports extra <code>channel_reestablish</code> fields   | IN       |                   | <a href="02-peer-protocol.md#message-retransmission">BOLT #2</a>          |
+| 3     | <code>initial_routing_sync</code>           | Sending node needs a complete routing information dump    | I        |                   | <a href="07-routing-gossip.md#initial-sync">BOLT #7</a>                |
+| 4/5   | <code>option_upfront_shutdown_script</code> | Commits to a shutdown scriptpubkey when opening channel   | IN       |                   | <a href="02-peer-protocol.md#the-open_channel-message">BOLT #2</a>                |
+| 6/7   | <code>gossip_queries</code>                 | More sophisticated gossip control                         | IN       |                   | <a href="07-routing-gossip.md#query-messages">BOLT #7</a>               |
+| 8/9   | <code>var_onion_optin</code>                | Requires/supports variable-length routing onion payloads  | IN9      |                   | <a href="04-onion-routing.md">Routing Onion Specification</a> |
+| 10/11 | <code>gossip_queries_ex</code>              | Gossip queries can include additional information         | IN       | <code>gossip_queries</code>  | <a href="07-routing-gossip.md#query-messages">BOLT #7</a>               |
+| 12/13 | <code>option_static_remotekey</code>        | Static key for remote output                              | IN       |                   | <a href="03-transactions.md">BOLT #3</a>         |
+| 14/15 | <code>payment_secret</code>                 | Node supports <code>payment_secret</code> field                      | IN9      | <code>var_onion_optin</code> | <a href="04-onion-routing.md">Routing Onion Specification</a> |
+| 16/17 | <code>basic_mpp</code>                      | Node can receive basic multi-part payments                | IN9      | <code>payment_secret</code>  | <a href="04-onion-routing.md#basic-multi-part-payments">BOLT #4</a>                 |
+| 18/19 | <code>option_support_large_channel</code>   | Can create large channels                                 | IN       |                   | <a href="02-peer-protocol.md#the-open_channel-message">BOLT #2</a> |
+| 20/21 | <code>option_anchor_outputs</code>          | Anchor outputs                                            | IN       | <code>option_static_remotekey</code> | <a href="03-transactions.md">BOLT #3</a>         |
+| 22/23 | <code>option_anchors_zero_fee_htlc_tx</code> | Anchor commitment type with zero fee HTLC transactions   | IN       |                   | <a href="03-transactions.md#htlc-timeout-and-htlc-success-transactions">BOLT #3</a>, <a href="https://lists.linuxfoundation.org/pipermail/lightning-dev/2020-September/002796.html">lightning-dev</a>|</p>
+
+<h2>Requirements</h2>
+
+<p>The origin node:
+  * If it supports a feature above, SHOULD set the corresponding odd
+    bit in all feature fields indicated by the Context column unless
+    indicated that it must set the even feature bit instead.
+  * If it requires a feature above, MUST set the corresponding even
+    feature bit in all feature fields indicated by the Context column,
+    unless indicated that it must set the odd feature bit instead.
+  * MUST NOT set feature bits it does not support.
+  * MUST NOT set feature bits in fields not specified by the table above.
+  * MUST set all transitive feature dependencies.</p>
+
+<p>The requirements for receiving specific bits are defined in the linked sections in the table above.
+The requirements for feature bits that are not defined
+above can be found in <a href="01-messaging.md#the-init-message">BOLT #1: The <code>init</code> Message</a>.</p>
+
+<h2>Rationale</h2>
+
+<p>There is no <em>even</em> bit for <code>initial_routing_sync</code>, as there would be little
+point: a local node can't determine if a remote node complies, and it must
+interpret the flag, as defined in the initial spec.</p>
+
+<p>Note that for feature flags which are available in both the <code>node_announcement</code>
+and <a href="11-payment-encoding.md">BOLT 11</a> invoice contexts, the features as set in
+the <a href="11-payment-encoding.md">BOLT 11</a> invoice should override those set in the
+<code>node_announcement</code>. This keeps things consistent with the unknown features
+behavior as specified in <a href="07-routing-gossip.md#the-node_announcement-message">BOLT 7</a>.</p>
+
+<p>The origin must set all transitive feature dependencies in order to create a
+well-formed feature vector. By validating all known dependencies up front, this
+simplifies logic gated on a single feature bit; the feature's dependencies are
+known to be set, and do not need to be validated at every feature gate.</p>
+
+<p><img src="https://i.creativecommons.org/l/by/4.0/88x31.png" alt="Creative Commons License" title="License CC-BY" />
+<br>
+This work is licensed under a <a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</p>
