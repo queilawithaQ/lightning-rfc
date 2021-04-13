@@ -27,6 +27,10 @@
 			dependencies = (
 			);
 			name = idk;
+			packageProductDependencies = (
+				36C534BF26263A7300C7A83B /* LightningKit */,
+				36C534C026263A7300C7A83B /* LightningKitUI */,
+			);
 			passBuildSettingsInEnvironment = 1;
 			productName = idk;
 		};
@@ -53,6 +57,9 @@
 				Base,
 			);
 			mainGroup = 36C534B32625B83000C7A83B;
+			packageReferences = (
+				36C534BE26263A7300C7A83B /* XCRemoteSwiftPackageReference "LightningKit" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -206,7 +213,7 @@
 				36C534BA2625B83000C7A83B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 		36C534BB2625B83000C7A83B /* Build configuration list for PBXLegacyTarget "idk" */ = {
 			isa = XCConfigurationList;
@@ -215,9 +222,33 @@
 				36C534BD2625B83000C7A83B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		36C534BE26263A7300C7A83B /* XCRemoteSwiftPackageReference "LightningKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/bejitono/LightningKit.git";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		36C534BF26263A7300C7A83B /* LightningKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 36C534BE26263A7300C7A83B /* XCRemoteSwiftPackageReference "LightningKit" */;
+			productName = LightningKit;
+		};
+		36C534C026263A7300C7A83B /* LightningKitUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 36C534BE26263A7300C7A83B /* XCRemoteSwiftPackageReference "LightningKit" */;
+			productName = LightningKitUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 36C534B42625B83000C7A83B /* Project object */;
 }
