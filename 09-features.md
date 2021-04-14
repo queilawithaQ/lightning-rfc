@@ -42,6 +42,16 @@ The Context column decodes as follows:
 | 22/23 | `option_anchors_zero_fee_htlc_tx` | Anchor commitment type with zero fee HTLC transactions    | IN       |                           | [BOLT #3][bolt03-htlc-tx], [lightning-dev][ml-sighash-single-harmful] |
 | 24/25 | `trampoline_routing`              | This node supports trampoline routing                     | IN9      | `basic_mpp`               | [BOLT #4](bolt04-trampoline)                                          |
 
+## Assigned `node_announcement` feature flags
+
+The following feature bits are currently assigned by this specification:
+
+|------|---------------------|--------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
+| Bits | Name                | Description                                            | Link                                                                                                             |
+|------|---------------------|--------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
+| 0/1  | `multi_frame_optin` | This node requires/supports multi-frame routing onions | [routing onion specification](https://github.com/lightningnetwork/lightning-rfc/blob/master/04-onion-routing.md) |
+
+
 ## Requirements
 
 The origin node:
